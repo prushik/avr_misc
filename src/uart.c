@@ -1,4 +1,4 @@
-// This should definitely be defined in the application.
+// This should definitely be defined in the application or like a config header or some shit.
 #ifndef F_CPU
 	#define __AVR_ATmega328P__ 1
 	#define F_CPU 16000000UL
@@ -9,12 +9,12 @@
 #endif
 
 #include <avr/io.h>
-#include <util/delay.h>
-
 #include <util/setbaud.h>
+#include "uart.h"
 
 //init
-void uart_init() {
+void uart_init()
+{
 	UBRR0H = UBRRH_VALUE;
 	UBRR0L = UBRRL_VALUE;
 
@@ -29,14 +29,16 @@ void uart_init() {
 }
 
 //blocking
-void uart_putchar(unsigned char c) {
+void uart_putchar(unsigned char c)
+{
 	loop_until_bit_is_set(UCSR0A, UDRE0); /* Wait until data register empty. */
 	UDR0 = c;
 	loop_until_bit_is_set(UCSR0A, TXC0); /* Wait until transmission ready. */
 }
 
 // same thing, but don't block
-void uart_send_char(unsigned char c) {
+void uart_send_char(unsigned char c)
+{
 	UDR0 = c;
 }
 
