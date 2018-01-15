@@ -1,12 +1,5 @@
 // This should definitely be defined in the application or like a config header or some shit.
-#ifndef F_CPU
-	#define __AVR_ATmega328P__ 1
-	#define F_CPU 16000000UL
-#endif
-
-#ifndef BAUD
-	#define BAUD 9600
-#endif
+#include "config.h"
 
 #include <avr/io.h>
 #include <util/setbaud.h>
