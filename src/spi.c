@@ -36,5 +36,5 @@ char spi_transfer(char data)
 {
 	SPDR = data;					// Start the transmission
 	while (!(SPSR & (1<<SPIF))) ;	// Wait the end of the transmission
-	return SPDR;					// return the received byte, we don't need that
+	return SPDR;
 }
