@@ -49,32 +49,14 @@ void si443x_init()
 	// SI443X_REG_TX_POWER
 	si443x_write(SI443X_REG_CHANNEL_STEPSIZE, {0x64}, 1);
 
-	
+	si443x_set_frequency_mhz(900);
 /*
-	ChangeRegister(REG_AFC_LOOP_GEARSHIFT_OVERRIDE, 0x3C); // turn off AFC
-	ChangeRegister(REG_AFC_TIMING_CONTROL, 0x02);
-
-	ChangeRegister(REG_AFC_LIMITER, 0xFF);
-
-	ChangeRegister(REG_DATAACCESS_CONTROL, 0xAD); // enable rx packet handling, enable tx packet handling, enable CRC, use CRC-IBM
-
-	ChangeRegister(REG_HEADER_CONTROL1, 0x0C); // no broadcast address control, enable check headers for bytes 3 & 2
-	ChangeRegister(REG_HEADER_CONTROL2, 0x22);  // enable headers byte 3 & 2, no fixed package length, sync word 3 & 2
-	ChangeRegister(REG_PREAMBLE_LENGTH, 0x08); // 8 * 4 bits = 32 bits (4 bytes) preamble length
-	ChangeRegister(REG_PREAMBLE_DETECTION, 0x3A); // validate 7 * 4 bits of preamble  in a package
-	ChangeRegister(REG_SYNC_WORD3, 0x2D); // sync byte 3 val
-	ChangeRegister(REG_SYNC_WORD2, 0xD4); // sync byte 2 val
-
-	ChangeRegister(REG_AGC_OVERRIDE, 0x60);
-	ChangeRegister(REG_TX_POWER, 0x1F); // max power
-
-	ChangeRegister(REG_CHANNEL_STEPSIZE, 0x64); // each channel is of 1 Mhz interval
-
 	setFrequency(_freqCarrier); // default freq
 	setBaudRate(_kbps); // default baud rate is 100kpbs
 	setChannel(_freqChannel); // default channel is 0
 	setCommsSignature(_packageSign); // default signature
 */
+
 	si443x_set_mode(Ready);
 }
 
@@ -96,14 +78,10 @@ void si443x_set_mode(byte mode) {
 	delay(20);
 }
 
-void si443x_set_frequency(unsigned long int freq) {
-	if ((freq < 240E6) || (freq > 930E6)) {
-	//    printf("error: invalid frequency: %lu\n", freqTX);
-	return; // invalid frequency
-	}
-
-	// set internal variable
-	//  _freqCarrier = freqTX;
+void si443x_set_frequency_hz(unsigned long int freq)
+{
+	if ((freq < 240E6) || (freq > 930E6))
+		return; // invalid frequency
 
 	char hbsel = (freq >= 480E6);
 
@@ -111,32 +89,20 @@ void si443x_set_frequency(unsigned long int freq) {
 	uint8_t freqFB = (uint8_t) freqNF; // truncate the int
 	uint16_t freqFC = (uint16_t) ((int)(freqNF - freqFB) * 64000);
 
-#ifdef DEBUG
-	printf("hbsel %d\n", hbsel);
-	printf("freqFB %d\n", freqFB);
-	printf("freqFC %d\n", freqFC);
-#endif
-
-	// sideband is always on (0x40) :
 	byte vals[3] = { 0x40 | (hbsel << 5) | (freqFB & 0x3F), freqFC >> 8, freqFC & 0xFF };
 	si443x_write(SI443X_REG_FREQBAND, vals, 3);
 }
 
-void si443x_set_frequency_mhz(uint16_t freq_mhz) {
-	if ((freq_mhz < 240) || (freq_mhz > 930)) {
-	//    printf("error: invalid frequency: %lu\n", freqTX);
-	return; // invalid frequency
-	}
+void si443x_set_frequency_mhz(uint16_t freq_mhz)
+{
+	if ((freq_mhz < 240) || (freq_mhz > 930))
+		return; // invalid frequency
 
-	// set internal variable
-	//  _freqCarrier = freqTX;
-
-	char hbsel = (freq >= 480);
+	unsigned char hbsel = (freq_mhz >= 480);
 
 	uint16_t freqNF = (freq_mhz / (10 << hbsel)) - 24;
-	uint16_t freqFC = (uint16_t) (freq_mhz % (10 << hbsel)) * 64000); // my bad, this is the remainder of division, not result of truncation
+	uint16_t freqFC = (freq_mhz % (10 << hbsel))*6400;
 
-	// sideband is always on (0x40) :
-	byte vals[3] = { 0x40 | (hbsel << 5) | (freqFB & 0x3F), freqFC >> 8, freqFC & 0xFF };
+	unsigned char vals[3] = { 0x40 | (hbsel << 5) | (freqNF & 0x3F), freqFC >> 8, freqFC & 0xFF };
 	si443x_write(SI443X_REG_FREQBAND, vals, 3);
 }
