@@ -82,8 +82,15 @@
 #define SI443X_REG_FREQCHANNEL 0x79
 #define SI443X_REG_CHANNEL_STEPSIZE 0x7A
 
+#define SI443x_REG_TX_FIFO_CONTROL_1 0x7C
+#define SI443x_REG_TX_FIFO_CONTROL_2 0x7D
+#define SI443x_REG_RX_FIFO_CONTROL 0x7E
 #define SI443X_REG_FIFO 0x7F
 
+#define SI443X_MODE_READ = 0x01
+#define SI443X_MODE_TUNE = 0x02
+#define SI443X_MODE_RX = 0x04
+#define SI443X_MODE_TX = 0x08
 
 // These functions implement si443x "burst" write and read
 void si443x_write(uint8_t reg, const uint8_t *value, uint8_t len);
