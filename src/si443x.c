@@ -87,7 +87,7 @@ void si443x_set_frequency_hz(unsigned long int freq)
 
 	uint16_t freqNF = ((uint16_t) freq / (10E6 << hbsel)) - 24;
 	uint8_t freqFB = (uint8_t) freqNF; // truncate the int
-	uint16_t freqFC = (uint16_t) ((int)(freqNF - freqFB) * 64000);
+	uint16_t freqFC = (uint16_t) ((int)(freqNF - freqFB) * (hbsel?3200:6400));
 
 	byte vals[3] = { 0x40 | (hbsel << 5) | (freqFB & 0x3F), freqFC >> 8, freqFC & 0xFF };
 	si443x_write(SI443X_REG_FREQBAND, vals, 3);
@@ -101,7 +101,7 @@ void si443x_set_frequency_mhz(uint16_t freq_mhz)
 	unsigned char hbsel = (freq_mhz >= 480);
 
 	uint16_t freqNF = (freq_mhz / (10 << hbsel)) - 24;
-	uint16_t freqFC = (freq_mhz % (10 << hbsel))*6400;
+	uint16_t freqFC = (freq_mhz % (10 << hbsel))*(hbsel?3200:6400);
 
 	unsigned char vals[3] = { 0x40 | (hbsel << 5) | (freqNF & 0x3F), freqFC >> 8, freqFC & 0xFF };
 	si443x_write(SI443X_REG_FREQBAND, vals, 3);
