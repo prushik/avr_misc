@@ -98,3 +98,8 @@ void si443x_read(uint8_t reg, uint8_t *out, uint8_t len);
 
 // Initialize and set up starting registers
 void si443x_init();
+
+// These functions set the radio frequency
+// the _mhz version is recommended for MCUs as it avoids words larger than a register pair
+void si443x_set_frequency_hz(unsigned long int freq);
+void si443x_set_frequency_mhz(uint16_t freq);
