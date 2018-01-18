@@ -122,25 +122,44 @@ void si443x_set_baud(uint16_t kbps) {
 	uint8_t vals[3] = {
 		(kbps < 30 ? 0x4c : 0x0c), 
 		0x23, 
-		(kbps <= 10 ? 24 : 240 )
+		(kbps <= 10 ? 24 : 240)
 	};
 	si443x_write(SI43X_REG_MODULATION_MODE1, vals, 3);
 
 	// set data rate
 	uint16_t bps_reg = (kbps*10000000) >> (kbps < 30 ? 21,16);
-	byte datarateVals[] = { bpsRegVal >> 8, bpsRegVal & 0xFF };
+	vals[0] = bps_reg >> 8;
+	vals[1] = bps_reg & 0xff;
 
-	BurstWrite(REG_TX_DATARATE1, datarateVals, 2);
+	si443x_write(SI443X_REG_TX_DATARATE1, vals, 2);
 
 	//now set the timings
-	uint16_t minBandwidth = (2 * (uint32_t) freqDev) + kbps;
-#ifdef DEBUG
-	printf("min Bandwidth value: %#04x\n", minBandwidth);
-#endif
-	byte IFValue = 0xff;
+	uint16_t minBandwidth = (((kbps <= 10 ? 24 : 240)<<1) + kbps) * 10;
+
+	uint8_t IFValue = 0xff;
+
+//IFFilterTable[][2] = { { 322, 0x26 }, { 3355, 0x88 }, { 3618, 0x89 }, { 4202, 0x8A }, { 4684, 0x8B }, { 5188, 0x8C }, { 5770, 0x8D }, { 6207, 0x8E } };
+
+/* psuedocode
+// avoiding a table...
+	ndec_exp = 5;
+	dwn3_bypass = 0;
+	filset = 1;
+	bw = 2.6;
+
+	row=0
+	for (row=0; row <= 42; r++)
+	{
+		bw = bw * 1.1;
+		ndec_exp = 5-(row/7);
+		dwn3_bypass = 0;
+		filset = 1+(row%7);
+	}
+*/ 
+
 	//since the table is ordered (from low to high), just find the 'minimum bandwith which is greater than required'
-	for (byte i = 0; i < 8; ++i) {
-		if (IFFilterTable[i][0] >= (minBandwidth * 10)) {
+	for (i = 0; i < 8; i++) {
+		if (IFFilterTable[i][0] >= (minBandwidth)) {
 			IFValue = IFFilterTable[i][1];
 			break;
 		}
@@ -154,7 +173,7 @@ void si443x_set_baud(uint16_t kbps) {
 	byte dwn3_bypass = (IFValue & 0x80) ? 1 : 0; // if msb is set
 	byte ndec_exp = (IFValue >> 4) & 0x07; // only 3 bits
 
-	uint16_t rxOversampling = round((500.0 * (1 + 2 * dwn3_bypass)) / ((pow(2, ndec_exp - 3)) * (double ) kbps));
+	uint16_t rxOversampling = round((500.0 * (1 + 2 * dwn3_bypass)) / (1<<(ndec_exp - 3)) * (double) kbps));
 
 	uint32_t ncOffset = ceil(((double) kbps * (pow(2, ndec_exp + 20))) / (500.0 * (1 + 2 * dwn3_bypass)));
 
