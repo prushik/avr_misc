@@ -145,17 +145,18 @@ void si443x_set_baud(uint16_t kbps) {
 	ndec_exp = 5;
 	dwn3_bypass = 0;
 	filset = 1;
-	bw = 2.6;
+	bw = 167; // 2.6<<7
 
 	row=0
 	for (row=0; row <= 42; r++)
 	{
-		bw = bw * 1.1;
-		ndec_exp = 5-(row/7);
+		bw = (bw * 141)>>7; // as long as this fits in 16 bits, we are good
+		ndec_exp = 6-(row/7);
 		dwn3_bypass = 0;
 		filset = 1+(row%7);
 	}
-*/ 
+*/
+
 
 	//since the table is ordered (from low to high), just find the 'minimum bandwith which is greater than required'
 	for (i = 0; i < 8; i++) {
