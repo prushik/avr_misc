@@ -68,6 +68,8 @@ void si443x_init()
 	si443x_set_frequency_mhz(900);
 
 	si443x_set_hw_address("PHIL", 4);
+
+	si443x_set_baud(100);
 /*
 	setBaudRate(_kbps); // default baud rate is 100kpbs
 	setChannel(_freqChannel); // default channel is 0
@@ -76,7 +78,8 @@ void si443x_init()
 	si443x_set_mode(SI443X_MODE_READY);
 }
 
-void si443x_set_mode(uint8_t mode) {
+void si443x_set_mode(uint8_t mode)
+{
 //	uint8_t _txPin = 21; // not sure what these were for... maybe leds?
 //	uint8_t _rxPin = 23;
 
@@ -130,11 +133,13 @@ void si443x_set_hw_address(uint8_t *addr, uint8_t len)
 }
 
 
-void si443x_set_baud(uint16_t kbps) {
+void si443x_set_baud(uint16_t kbps)
+{
 	// chip normally supports very low bps values, but they are cumbersome to implement - so I just didn't implement lower bps values
 	if ((kbps > 256) || (kbps < 1))
 		return;
-uint8_t freq_dev = (kbps < 30 ? 0x4c : 0x0c);
+
+	uint8_t freq_dev = (kbps < 30 ? 0x4c : 0x0c);
 	uint8_t vals[3] = {
 		(kbps < 30 ? 0x4c : 0x0c), 
 		0x23, 
