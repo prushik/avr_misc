@@ -2,6 +2,7 @@
 #include "config.h"
 #include "si443x.h"
 #include "spi.h"
+#include <avr/io.h>
 
 void si443x_write(uint8_t reg, const uint8_t *value, uint8_t len)
 {
@@ -57,7 +58,7 @@ void si443x_init()
 	setChannel(_freqChannel); // default channel is 0
 */
 
-	si443x_set_mode(Ready);
+	si443x_set_mode(SI443X_MODE_READY);
 }
 
 void si443x_set_mode(uint8_t mode) {
@@ -85,11 +86,11 @@ void si443x_set_frequency_hz(unsigned long int freq)
 
 	char hbsel = (freq >= 480E6);
 
-	uint16_t freqNF = ((uint16_t) freq / (10E6 << hbsel)) - 24;
+	uint16_t freqNF = ((uint16_t) freq / (10000000 << hbsel)) - 24;
 	uint8_t freqFB = (uint8_t) freqNF; // truncate the int
 	uint16_t freqFC = (uint16_t) ((int)(freqNF - freqFB) * (6400>>hbsel));
 
-	byte vals[3] = { 0x40 | (hbsel << 5) | (freqFB & 0x3F), freqFC >> 8, freqFC & 0xFF };
+	uint8_t vals[3] = { 0x40 | (hbsel << 5) | (freqFB & 0x3F), freqFC >> 8, freqFC & 0xFF };
 	si443x_write(SI443X_REG_FREQBAND, vals, 3);
 }
 
@@ -118,23 +119,23 @@ void si443x_set_baud(uint16_t kbps) {
 	// chip normally supports very low bps values, but they are cumbersome to implement - so I just didn't implement lower bps values
 	if ((kbps > 256) || (kbps < 1))
 		return;
-
+uint8_t freq_dev = (kbps < 30 ? 0x4c : 0x0c);
 	uint8_t vals[3] = {
 		(kbps < 30 ? 0x4c : 0x0c), 
 		0x23, 
 		(kbps <= 10 ? 24 : 240)
 	};
-	si443x_write(SI43X_REG_MODULATION_MODE1, vals, 3);
+	si443x_write(SI443X_REG_MODULATION_MODE1, vals, 3);
 
 	// set data rate
-	uint16_t bps_reg = (kbps*10000000) >> (kbps < 30 ? 21,16);
+	uint16_t bps_reg = (kbps*10000000) >> (kbps < 30 ? 21 : 16);
 	vals[0] = bps_reg >> 8;
 	vals[1] = bps_reg & 0xff;
 
 	si443x_write(SI443X_REG_TX_DATARATE1, vals, 2);
 
 	//now set the timings
-	uint16_t minBandwidth = (((kbps <= 10 ? 24 : 240)<<1) + kbps) * 10;
+	uint16_t min_bandwidth = (((kbps <= 10 ? 24 : 240)<<1) + kbps) << 6;
 
 	uint8_t IFValue = 0xff;
 
@@ -150,36 +151,46 @@ void si443x_set_baud(uint16_t kbps) {
 	row=0
 	for (row=0; row <= 42; r++)
 	{
-		bw = (bw * 141)>>7; // as long as this fits in 16 bits, we are good
+		bw = (bw * 141)>>7; // as long as this fits in 16 bits, we are good (it does not)
 		ndec_exp = 6-(row/7);
 		dwn3_bypass = 0;
 		filset = 1+(row%7);
 	}
 */
+	uint8_t ndec_exp = 5;
+	uint8_t dwn3_bypass = 0;
+	uint8_t filset = 1;
+	uint16_t bw = 167; // 2.6<<7
+	uint8_t bw_ = 0; // 2.6<<7
 
-
-	//since the table is ordered (from low to high), just find the 'minimum bandwith which is greater than required'
-	for (i = 0; i < 8; i++) {
-		if (IFFilterTable[i][0] >= (minBandwidth)) {
-			IFValue = IFFilterTable[i][1];
+	uint8_t row=0;
+	for (row=0; row <= 42; row++)
+	{
+		bw_ = (bw>>7); // we need this because the intermediate value won't fit in 16 bits, so we need to split up the job into 2 parts
+		bw = (bw*141) + (((bw&0x7f) * 141)>>7);
+		if (bw > min_bandwidth) {
+			ndec_exp = 6-(row/7);
+			dwn3_bypass = 0;
+			filset = 1+(row%7);
+			IFValue = dwn3_bypass<<7 | (ndec_exp&0x03)<<5 | filset;
+			si443x_write(SI443X_REG_IF_FILTER_BW, IFValue, 1);
 			break;
 		}
 	}
+
 #ifdef DEBUG
 	printf("Selected IF value: %#04x\n", IFValue);
 #endif
 
-	ChangeRegister(REG_IF_FILTER_BW, IFValue);
+//	byte dwn3_bypass = (IFValue & 0x80) ? 1 : 0; // if msb is set
+//	byte ndec_exp = (IFValue >> 4) & 0x07; // only 3 bits
 
-	byte dwn3_bypass = (IFValue & 0x80) ? 1 : 0; // if msb is set
-	byte ndec_exp = (IFValue >> 4) & 0x07; // only 3 bits
-
-	uint16_t rxOversampling = round((500.0 * (1 + 2 * dwn3_bypass)) / (1<<(ndec_exp - 3)) * (double) kbps));
+	uint16_t rxOversampling = round((500.0 * (1 + 2 * dwn3_bypass)) / (1<<(ndec_exp - 3) * (double) kbps));
 
 	uint32_t ncOffset = ceil(((double) kbps * (pow(2, ndec_exp + 20))) / (500.0 * (1 + 2 * dwn3_bypass)));
 
-	uint16_t crGain = 2 + ((65535 * (int64_t) kbps) / ((int64_t) rxOversampling * freqDev));
-	byte crMultiplier = 0x00;
+	uint16_t crGain = 2 + ((65535 * (int64_t) kbps) / ((int64_t) rxOversampling * freq_dev));
+	uint8_t crMultiplier = 0x00;
 	if (crGain > 0x7FF) {
 		crGain = 0x7FF;
 	}
@@ -192,8 +203,8 @@ void si443x_set_baud(uint16_t kbps) {
 	printf("crMultiplier value: %#04x\n", crMultiplier);
 #endif
 
-	byte timingVals[] = { rxOversampling & 0x00FF, ((rxOversampling & 0x0700) >> 3) | ((ncOffset >> 16) & 0x0F),
+	uint8_t timingVals[] = { rxOversampling & 0x00FF, ((rxOversampling & 0x0700) >> 3) | ((ncOffset >> 16) & 0x0F),
 	  (ncOffset >> 8) & 0xFF, ncOffset & 0xFF, ((crGain & 0x0700) >> 8) | crMultiplier, crGain & 0xFF };
 
-	BurstWrite(REG_CLOCK_RECOVERY_OVERSAMPLING, timingVals, 6);
+	si443x_write(SI443X_REG_CLOCK_RECOVERY_OVERSAMPLING, timingVals, 6);
 }
