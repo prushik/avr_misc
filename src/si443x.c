@@ -1,8 +1,10 @@
 // si443x (and boards using one, like xl4432 and rf-uh4432) communicate through SPI
 #include "config.h"
+
+#include <avr/io.h>
+
 #include "si443x.h"
 #include "spi.h"
-#include <avr/io.h>
 
 void si443x_write(uint8_t reg, const uint8_t *value, uint8_t len)
 {
@@ -36,23 +38,36 @@ void si443x_read(uint8_t reg, uint8_t *out, uint8_t len)
 // SPI interface has 10mhz max
 void si443x_init()
 {
-	si443x_write(SI443X_REG_AFC_LOOP_GEARSHIFT_OVERRIDE, {0x3c, 0x02}, 2);
+	uint8_t vals[6];
+
+	vals[0] = 0x3c; vals[1] = 0x02;
+	si443x_write(SI443X_REG_AFC_LOOP_GEARSHIFT_OVERRIDE, vals, 2);
 	// REG_AFC_TIMING_CONTROL
-	si443x_write(SI443X_REG_AFC_LIMITER, {0xff}, 1);
-	si443x_write(SI443X_REG_DATAACCESS_CONTROL, {0xad}, 1);
-	si443x_write(SI443X_REG_HEADER_CONTROL1, {0x0c, 0x22, 0x08, 0x3a, 0x2d, 0xd4}, 6);
+
+	vals[0] = 0xff;
+	si443x_write(SI443X_REG_AFC_LIMITER, vals, 1);
+
+	vals[0] = 0xad;
+	si443x_write(SI443X_REG_DATAACCESS_CONTROL, vals, 1);
+
+	vals[0] = 0x0c;	vals[1] = 0x22;	vals[2] = 0x08;	vals[3] = 0x3a;	vals[4] = 0x2d;	vals[5] = 0xd4;
+	si443x_write(SI443X_REG_HEADER_CONTROL1, vals, 6);
 	// SI443X_REG_HEADER_CONTROL2
 	// SI443X_REG_PREAMBLE_LENGTH
 	// SI443X_REG_PREAMBLE_DETECTION
 	// SI443X_REG_SYNC_WORD3
 	// SI443X_REG_SYNC_WORD2
-	si443x_write(SI443X_REG_AGC_OVERRIDE, {0x60, 0x1f}, 2);
+
+	vals[0] = 0x60;	vals[1] = 0x1f;
+	si443x_write(SI443X_REG_AGC_OVERRIDE, vals, 2);
 	// SI443X_REG_TX_POWER
-	si443x_write(SI443X_REG_CHANNEL_STEPSIZE, {0x64}, 1);
+
+	vals[0] = 0x64;
+	si443x_write(SI443X_REG_CHANNEL_STEPSIZE, vals, 1);
 
 	si443x_set_frequency_mhz(900);
 
-	si443x_set_hw_address("PHIL");
+	si443x_set_hw_address("PHIL", 4);
 /*
 	setBaudRate(_kbps); // default baud rate is 100kpbs
 	setChannel(_freqChannel); // default channel is 0
@@ -173,7 +188,7 @@ uint8_t freq_dev = (kbps < 30 ? 0x4c : 0x0c);
 			dwn3_bypass = 0;
 			filset = 1+(row%7);
 			IFValue = dwn3_bypass<<7 | (ndec_exp&0x03)<<5 | filset;
-			si443x_write(SI443X_REG_IF_FILTER_BW, IFValue, 1);
+			si443x_write(SI443X_REG_IF_FILTER_BW, &IFValue, 1);
 			break;
 		}
 	}
@@ -185,7 +200,7 @@ uint8_t freq_dev = (kbps < 30 ? 0x4c : 0x0c);
 //	byte dwn3_bypass = (IFValue & 0x80) ? 1 : 0; // if msb is set
 //	byte ndec_exp = (IFValue >> 4) & 0x07; // only 3 bits
 
-	uint16_t rxOversampling = round((500.0 * (1 + 2 * dwn3_bypass)) / (1<<(ndec_exp - 3) * (double) kbps));
+	uint16_t rxOversampling = round((500.0 * (1 + 2 * dwn3_bypass)) / ((1<<(ndec_exp - 3)) * (double) kbps));
 
 	uint32_t ncOffset = ceil(((double) kbps * (pow(2, ndec_exp + 20))) / (500.0 * (1 + 2 * dwn3_bypass)));
 

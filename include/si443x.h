@@ -102,4 +102,10 @@ void si443x_init();
 // These functions set the radio frequency
 // the _mhz version is recommended for MCUs as it avoids words larger than a register pair
 void si443x_set_frequency_hz(unsigned long int freq);
-void si443x_set_frequency_mhz(uint16_t freq);
+void si443x_set_frequency_mhz(uint16_t freq_mhz);
+
+// Function to set mode
+void si443x_set_mode(uint8_t mode);
+
+// Function to configure ezmac(r) address (header)
+void si443x_set_hw_address(uint8_t *addr, uint8_t len);
