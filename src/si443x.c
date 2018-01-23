@@ -159,24 +159,6 @@ void si443x_set_baud(uint16_t kbps)
 
 	uint8_t IFValue = 0xff;
 
-//IFFilterTable[][2] = { { 322, 0x26 }, { 3355, 0x88 }, { 3618, 0x89 }, { 4202, 0x8A }, { 4684, 0x8B }, { 5188, 0x8C }, { 5770, 0x8D }, { 6207, 0x8E } };
-
-/* psuedocode
-// avoiding a table...
-	ndec_exp = 5;
-	dwn3_bypass = 0;
-	filset = 1;
-	bw = 167; // 2.6<<7
-
-	row=0
-	for (row=0; row <= 42; r++)
-	{
-		bw = (bw * 141)>>7; // as long as this fits in 16 bits, we are good (it does not)
-		ndec_exp = 6-(row/7);
-		dwn3_bypass = 0;
-		filset = 1+(row%7);
-	}
-*/
 	uint8_t ndec_exp = 5;
 	uint8_t dwn3_bypass = 0;
 	uint8_t filset = 1;
@@ -186,13 +168,13 @@ void si443x_set_baud(uint16_t kbps)
 	uint8_t row=0;
 	for (row=0; row <= 42; row++)
 	{
-		bw_ = (bw>>7); // we need this because the intermediate value won't fit in 16 bits, so we need to split up the job into 2 parts
-		bw = (bw*141) + (((bw&0x7f) * 141)>>7);
+		bw_ = (bw >> 7); // we need this because the intermediate value won't fit in 16 bits, so we need to split up the job into 2 parts
+		bw = (bw * 141) + (((bw & 0x7f) * 141) >> 7);
 		if (bw > min_bandwidth) {
-			ndec_exp = 6-(row/7);
+			ndec_exp = 6 - (row / 7);
 			dwn3_bypass = 0;
-			filset = 1+(row%7);
-			IFValue = dwn3_bypass<<7 | (ndec_exp&0x03)<<5 | filset;
+			filset = 1 + (row % 7);
+			IFValue = dwn3_bypass << 7 | (ndec_exp & 0x03) << 5 | filset;
 			si443x_write(SI443X_REG_IF_FILTER_BW, &IFValue, 1);
 			break;
 		}
@@ -202,18 +184,20 @@ void si443x_set_baud(uint16_t kbps)
 	printf("Selected IF value: %#04x\n", IFValue);
 #endif
 
+// these should already be set
 //	byte dwn3_bypass = (IFValue & 0x80) ? 1 : 0; // if msb is set
 //	byte ndec_exp = (IFValue >> 4) & 0x07; // only 3 bits
 
+	// todo, these need to be converted into integer maths
 	uint16_t rxOversampling = round((500.0 * (1 + 2 * dwn3_bypass)) / ((1<<(ndec_exp - 3)) * (double) kbps));
 
 	uint32_t ncOffset = ceil(((double) kbps * (pow(2, ndec_exp + 20))) / (500.0 * (1 + 2 * dwn3_bypass)));
 
 	uint16_t crGain = 2 + ((65535 * (int64_t) kbps) / ((int64_t) rxOversampling * freq_dev));
 	uint8_t crMultiplier = 0x00;
-	if (crGain > 0x7FF) {
+	if (crGain > 0x7FF)
 		crGain = 0x7FF;
-	}
+
 #ifdef DEBUG
 	printf("dwn3_bypass value: %#04x\n", dwn3_bypass);
 	printf("ndec_exp value: %#04x\n", ndec_exp);
