@@ -109,3 +109,5 @@ void si443x_set_mode(uint8_t mode);
 
 // Function to configure ezmac(r) address (header)
 void si443x_set_hw_address(uint8_t *addr, uint8_t len);
+
+void si443x_set_baud(uint16_t kbps);

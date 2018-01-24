@@ -1,7 +1,19 @@
 // si443x (and boards using one, like xl4432 and rf-uh4432) communicate through SPI
 #include "config.h"
 
-#include <avr/io.h>
+#ifndef X86
+	#include <avr/io.h>
+#else
+	#include <stdio.h>
+	#include <math.h>
+	#include <stdlib.h>
+	#include <stdint.h>
+	#include <sys/types.h>
+	char PORTB;
+
+	char spi_transfer(char data) {printf("spi: 0x%02x\n", data);}
+	char output_device[128] = {0};
+#endif
 
 #include "si443x.h"
 #include "spi.h"
@@ -14,6 +26,9 @@ void si443x_write(uint8_t reg, const uint8_t *value, uint8_t len)
 	spi_transfer(0x80 | reg);
 	for (i = 0; i < len; i++)
 	{
+		#ifdef X86
+			output_device[reg+i] = value[i];
+		#endif
 		spi_transfer(value[i]);
 	}
 	SI443X_SS_PORT &= ~SI443X_SS_BIT;
@@ -33,6 +48,24 @@ void si443x_read(uint8_t reg, uint8_t *out, uint8_t len)
 	SI443X_SS_PORT &= ~SI443X_SS_BIT;
 }
 
+#ifdef X86
+	void readall()
+	{
+		int i;
+		printf("REGISTERS: ");
+		for (i=0; i< 0x7F; i++)
+		{
+			printf("0x%02x ", i);
+		}
+		printf("\n");
+		printf("READALL: ");
+		for (i=0; i< 0x7F; i++)
+		{
+			printf("0x%02x ", output_device[i]);
+		}
+		printf("\n");
+	}
+#endif
 
 // SPI should be initialized first
 // SPI interface has 10mhz max
@@ -58,14 +91,16 @@ void si443x_init()
 	// SI443X_REG_SYNC_WORD3
 	// SI443X_REG_SYNC_WORD2
 
-	vals[0] = 0x60;	vals[1] = 0x1f;
-	si443x_write(SI443X_REG_AGC_OVERRIDE, vals, 2);
-	// SI443X_REG_TX_POWER
+	vals[0] = 0x60;
+	si443x_write(SI443X_REG_AGC_OVERRIDE, vals, 1);
+
+	vals[0] = 0x1f;
+	si443x_write(SI443X_REG_TX_POWER, vals, 1);
 
 	vals[0] = 0x64;
 	si443x_write(SI443X_REG_CHANNEL_STEPSIZE, vals, 1);
 
-	si443x_set_frequency_mhz(900);
+	si443x_set_frequency_mhz(433);
 
 	si443x_set_hw_address("PHIL", 4);
 
@@ -139,7 +174,7 @@ void si443x_set_baud(uint16_t kbps)
 	if ((kbps > 256) || (kbps < 1))
 		return;
 
-	uint8_t freq_dev = (kbps < 30 ? 0x4c : 0x0c);
+	uint8_t freq_dev = (kbps <= 10 ? 15 : 150);
 	uint8_t vals[3] = {
 		(kbps < 30 ? 0x4c : 0x0c), 
 		0x23, 
@@ -155,7 +190,9 @@ void si443x_set_baud(uint16_t kbps)
 	si443x_write(SI443X_REG_TX_DATARATE1, vals, 2);
 
 	//now set the timings
-	uint16_t min_bandwidth = (((kbps <= 10 ? 24 : 240)<<1) + kbps) << 6;
+	uint16_t min_bandwidth = ((freq_dev<<1) + kbps) << 6;
+
+	printf("min_bw %lf \n", (double)min_bandwidth/64.0);
 
 	uint8_t IFValue = 0xff;
 
@@ -166,19 +203,39 @@ void si443x_set_baud(uint16_t kbps)
 	uint8_t bw_ = 0; // 2.6<<7
 
 	uint8_t row=0;
-	for (row=0; row <= 42; row++)
+	for (row=0; row < 64; row++)
 	{
-		bw_ = (bw >> 7); // we need this because the intermediate value won't fit in 16 bits, so we need to split up the job into 2 parts
-		bw = (bw * 141) + (((bw & 0x7f) * 141) >> 7);
-		if (bw > min_bandwidth) {
-			ndec_exp = 6 - (row / 7);
-			dwn3_bypass = 0;
-			filset = 1 + (row % 7);
-			IFValue = dwn3_bypass << 7 | (ndec_exp & 0x03) << 5 | filset;
-			si443x_write(SI443X_REG_IF_FILTER_BW, &IFValue, 1);
-			break;
+		printf("freq %lf \n", (double)bw/64.0 );
+
+		if (bw > min_bandwidth)
+		{
+			if (row < 42)
+			{
+				ndec_exp = 6 - (row / 7);
+				dwn3_bypass = 0;
+				filset = 1 + (row % 7);
+			}
+			else
+			{
+				ndec_exp = row <= 44;
+				dwn3_bypass = 1;
+				filset = 1 + (((row+6)+(row>44?8:0)+(row>49?3:0)) % 15);
+			}
+			goto found_filter;
 		}
+
+		bw_ = (bw >> 7); // we need this because the intermediate value won't fit in 16 bits, so we need to split up the job into 2 parts
+		bw = (bw_ * 141) + (((bw & 0x7f) * 141) >> 7);
 	}
+
+found_filter:
+#ifdef X86
+  printf("dwn3_bypass value: %#02x\n", dwn3_bypass);
+  printf("ndec_exp value: %#02x\n", ndec_exp);
+  printf("filset value: %#02x\n", filset);
+#endif
+	IFValue = dwn3_bypass << 7 | (ndec_exp & 0x03) << 5 | filset;
+	si443x_write(SI443X_REG_IF_FILTER_BW, &IFValue, 1);
 
 #ifdef DEBUG
 	printf("Selected IF value: %#04x\n", IFValue);
@@ -198,7 +255,7 @@ void si443x_set_baud(uint16_t kbps)
 	if (crGain > 0x7FF)
 		crGain = 0x7FF;
 
-#ifdef DEBUG
+#ifdef X86
 	printf("dwn3_bypass value: %#04x\n", dwn3_bypass);
 	printf("ndec_exp value: %#04x\n", ndec_exp);
 	printf("rxOversampling value: %#04x\n", rxOversampling);
@@ -212,3 +269,11 @@ void si443x_set_baud(uint16_t kbps)
 
 	si443x_write(SI443X_REG_CLOCK_RECOVERY_OVERSAMPLING, timingVals, 6);
 }
+
+#ifdef X86
+int main()
+{
+	si443x_init();
+	readall();
+}
+#endif
