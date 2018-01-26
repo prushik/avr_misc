@@ -105,10 +105,9 @@ void si443x_init()
 	si443x_set_hw_address("PHIL", 4);
 
 	si443x_set_baud(100);
-/*
-	setBaudRate(_kbps); // default baud rate is 100kpbs
-	setChannel(_freqChannel); // default channel is 0
-*/
+
+	vals[0] = 0x0; // channel 0
+	si443x_write(SI443X_REG_FREQCHANNEL, vals, 1);
 
 	si443x_set_mode(SI443X_MODE_READY);
 }
