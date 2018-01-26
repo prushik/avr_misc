@@ -269,6 +269,71 @@ found_filter:
 	si443x_write(SI443X_REG_CLOCK_RECOVERY_OVERSAMPLING, timingVals, 6);
 }
 
+
+bool sendPacket(uint8_t length, const byte* data, bool waitResponse, uint32_t ackTimeout,
+	uint8_t* responseLength, byte* responseBuffer)
+{
+
+	si443x_clear_fifo(SI443X_FIFO_TX);
+	si443x_write(SI443X_REG_PKG_LEN, length, 1);
+
+	si443x_write(SI443X_REG_FIFO, data, length);
+
+	ChangeRegister(REG_INT_ENABLE1, 0x04); // set interrupts on for package sent
+	ChangeRegister(REG_INT_ENABLE2, 0x00); // set interrupts off for anything else
+	//read interrupt registers to clean them
+	ReadRegister(REG_INT_STATUS1);
+	ReadRegister(REG_INT_STATUS2);
+
+	switchMode(TXMode | Ready);
+
+	uint64_t enterMillis = millis();
+
+	while (millis() - enterMillis < 200) {
+
+		byte intStatus = ReadRegister(REG_INT_STATUS1);
+		ReadRegister(REG_INT_STATUS2);
+
+		if (intStatus & 0x04) {
+			si443x_set_mode(SI443X_MODE_READY | SI443X_MODE_TUNE);
+			#ifdef DEBUG
+			  printf("Package sent! -- ");
+			  printf("%#04x\n", intStatus);
+			#endif
+
+			// package sent. now, return true if not to wait ack, or wait ack (wait for packet only for 'remaining' amount of time)
+			if (waitResponse) {
+				if (waitForPacket(ackTimeout)) {
+					getPacketReceived(responseLength, responseBuffer);
+					return true;
+				} else {
+					return false;
+				}
+			} else {
+				return true;
+			}
+		}
+	}
+
+	//timeout occured.
+	//#ifdef DEBUG
+	printf("Timeout in Transit -- \n");
+	//#endif
+	si443x_set_mode(SI443X_MODE_READY);
+
+	if (ReadRegister(REG_DEV_STATUS) & 0x80) {
+		si443x_clear_fifo(SI443X_FIFO_RX | SI443X_FIFO_TX);
+	}
+
+	return false;
+}
+
+void si443x_clear_fifo(uint8_t which)
+{
+	si443x_write(SI443X_REG_OPERATION_CONTROL, &which, 1);
+	si443x_write(SI443X_REG_OPERATION_CONTROL, 0x00,   1);
+}
+
 #ifdef X86
 int main()
 {

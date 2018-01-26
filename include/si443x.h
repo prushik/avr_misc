@@ -111,3 +111,8 @@ void si443x_set_mode(uint8_t mode);
 void si443x_set_hw_address(uint8_t *addr, uint8_t len);
 
 void si443x_set_baud(uint16_t kbps);
+
+
+#define SI443X_FIFO_TX 0x01
+#define SI443X_FIFO_RX 0x02
+void si443x_clear_fifo(uint8_t which);
