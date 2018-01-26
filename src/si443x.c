@@ -183,7 +183,7 @@ void si443x_set_baud(uint16_t kbps)
 	si443x_write(SI443X_REG_MODULATION_MODE1, vals, 3);
 
 	// set data rate
-	uint16_t bps_reg = (kbps*10000000) >> (kbps < 30 ? 21 : 16);
+	uint16_t bps_reg = (kbps << (kbps < 30 ? 21 : 16))/1000; // this can definitely overflow
 	vals[0] = bps_reg >> 8;
 	vals[1] = bps_reg & 0xff;
 
@@ -246,7 +246,7 @@ found_filter:
 //	byte ndec_exp = (IFValue >> 4) & 0x07; // only 3 bits
 
 	// todo, these need to be converted into integer maths
-	uint16_t rxOversampling = round((500.0 * (1 + 2 * dwn3_bypass)) / ((1<<(ndec_exp - 3)) * (double) kbps));
+	uint16_t rxOversampling = round((500.0 * (1 + 2 * dwn3_bypass)) / (pow(2, ndec_exp-3) * (double) kbps));
 
 	uint32_t ncOffset = ceil(((double) kbps * (pow(2, ndec_exp + 20))) / (500.0 * (1 + 2 * dwn3_bypass)));
 
